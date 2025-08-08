@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Il Barone Russo</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #000; font-family: monospace; color: #fff; }
+    #gameCanvas { display: block; margin: 50px auto 0; background: #87CEEB; }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="400"></canvas>
+  <script>
+    // Constants
+    const LEVEL_LENGTH = 5000;
+    const MAX_LEVEL = 5;
+    const MAX_AMMO = 20;
+    const INITIAL_SCORE = 5;
+
+    // Canvas
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // State
+    let gameStarted = false;
+    let level = 1;
+    let score, distance, gameOver, outOfAmmo, levelComplete;
+    let scrollSpeed, spawnInterval, bossHPMax;
+    let lastSpawn, boss, bossSpawned, bossHP;
+    let ammo;
+
+    // Player biplane
+    const plane = { x: 100, y: 150, w: 50, h: 20 };
+
+    // Entities
+    let npcs = [], bombs = [];
+
+    // Faded silhouette
+    const silhouette = [];
+    for (let x = 0; x < canvas.width; x += 20) silhouette.push({ x, h: 20 + Math.random() * 10 });
+
+    // Input
+    const keys = {};
+    document.addEventListener('keydown', e => {
+      keys[e.code] = true;
+      if (!gameStarted && e.code === 'Enter') startGame();
+      if (levelComplete && e.code === 'Enter') nextLevel();
+      if ((gameOver || outOfAmmo) && e.code === 'Enter') startGame();
+    });
+    document.addEventListener('keyup', e => keys[e.code] = false);
+
+    function startGame() { gameStarted = true; level = 1; initLevel(); }
+    function nextLevel() { level++; initLevel(); levelComplete = false; }
+
+    function initLevel() {
+      score = INITIAL_SCORE;
+      distance = 0;
+      gameOver = false;
+      outOfAmmo = false;
+      levelComplete = false;
+      npcs = [];
+      bombs = [];
+      lastSpawn = Date.now();
+      boss = null;
+      bossSpawned = false;
+
+      scrollSpeed = 1 + level * 0.5;
+      spawnInterval = Math.max(1500 - (level - 1) * 250, 400);
+      bossHPMax = level * 10;
+      bossHP = bossHPMax;
+      ammo = MAX_AMMO;
+    }
+
+    function spawnNPC() {
+      const types = ['admin', 'fisher', 'civil'];
+      const type = types[Math.floor(Math.random() * types.length)];
+      npcs.push({ type, x: canvas.width + 10, y: 350 - 18, w: 12, h: 18, dx: scrollSpeed + Math.random() });
+    }
+
+    function spawnBoss() {
+      boss = { x: canvas.width + 20, y: 350 - 60, w: 100, h: 60, dx: scrollSpeed };
+      bossSpawned = true;
+    }
+
+    function dropBomb() {
+      if (ammo > 0) {
+        bombs.push({ x: plane.x + plane.w / 2, y: plane.y + plane.h, w: 6, h: 8, dy: 5 });
+        ammo--;
+        if (ammo === 0) outOfAmmo = true;
+      }
+    }
+
+    function update() {
+      if (!gameStarted || gameOver || outOfAmmo || levelComplete) return;
+
+      // Controls
+      if (keys['ArrowUp'] && plane.y > 50) plane.y -= 3;
+      if (keys['ArrowDown'] && plane.y < 300) plane.y += 3;
+      if (keys['ArrowLeft'] && plane.x > 0) plane.x -= 3;
+      if (keys['ArrowRight'] && plane.x + plane.w < canvas.width) plane.x += 3;
+      if (keys['Space']) { dropBomb(); keys['Space'] = false; }
+
+      // Scroll
+      distance += scrollSpeed;
+      if (distance >= LEVEL_LENGTH && !bossSpawned) spawnBoss();
+
+      // Spawn NPCs
+      if (!bossSpawned && Date.now() - lastSpawn > spawnInterval) { spawnNPC(); lastSpawn = Date.now(); }
+
+      // Move entities
+      npcs.forEach(n => n.x -= n.dx);
+      bombs.forEach(b => b.y += b.dy);
+      if (bossSpawned && boss) {
+        boss.x -= boss.dx;
+        // Boss escapes
+        if (boss.x + boss.w < 0 && bossHP > 0) gameOver = true;
+      }
+
+      // Collisions
+      bombs.forEach((b, bi) => {
+        if (bossSpawned && boss && b.x > boss.x && b.x < boss.x + boss.w && b.y > boss.y && b.y < boss.y + boss.h) {
+          bossHP--; bombs.splice(bi, 1);
+          if (bossHP <= 0) {
+            if (level < MAX_LEVEL) levelComplete = true;
+            else gameOver = true;
+          }
+          return;
+        }
+        npcs.forEach((n, ni) => {
+          if (b.x > n.x && b.x < n.x + n.w && b.y > n.y && b.y < n.y + n.h) {
+            if (n.type === 'admin') { score += 10; ammo = Math.min(ammo + 5, MAX_AMMO); }
+            else { score -= 5; }
+            bombs.splice(bi, 1);
+            npcs.splice(ni, 1);
+          }
+        });
+      });
+
+      // Cleanup
+      npcs = npcs.filter(n => n.x + n.w > 0);
+      bombs = bombs.filter(b => b.y < canvas.height);
+
+      if (score <= 0) gameOver = true;
+    }
+
+    function drawStartScreen() {
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+      ctx.font = 'bold 24px monospace'; ctx.fillText('Il Barone Russo', canvas.width / 2, 100);
+      ctx.font = '16px monospace';
+      ctx.fillText('Livello ' + level, canvas.width / 2, 140);
+      ctx.fillText('Sconfiggi gli amministratori, evita cittadini e pescatori.', canvas.width / 2, 180);
+      ctx.fillText('Premi ENTER per iniziare', canvas.width / 2, 240);
+    }
+
+    function drawLevelComplete() {
+      ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#0f0'; ctx.textAlign = 'center'; ctx.font = 'bold 36px monospace';
+      ctx.fillText('Hai vinto il livello ' + level + '!', canvas.width / 2, canvas.height / 2 - 20);
+      ctx.font = '20px monospace'; ctx.fillText('Premi ENTER per proseguire', canvas.width / 2, canvas.height / 2 + 20);
+    }
+
+    function drawGameOver() {
+      ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      let msg = 'GAME OVER';
+      if (outOfAmmo) msg = 'Hai finito la cacca da buttare.';
+      else if (bossSpawned && boss && boss.x + boss.w < 0) msg = 'DALL·E è game over. Riprova!';
+      ctx.fillStyle = '#f00'; ctx.textAlign = 'center'; ctx.font = 'bold 48px monospace';
+      ctx.fillText(msg, canvas.width / 2, canvas.height / 2 - 20);
+      ctx.font = '20px monospace'; ctx.fillText('Punteggio: ' + score, canvas.width / 2, canvas.height / 2 + 20);
+      ctx.fillText('Premi ENTER per ricominciare', canvas.width / 2, canvas.height / 2 + 60);
+    }
+
+    function draw() {
+      // Sky
+      ctx.fillStyle = '#87CEEB'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Hills faded
+      ctx.fillStyle = 'rgba(200,200,200,0.1)'; silhouette.forEach(s => ctx.fillRect(s.x, 300 - s.h, 20, s.h));
+      // Sea only
+      ctx.fillStyle = '#1E90FF'; ctx.fillRect(0, 350, canvas.width, 50);
+      // Positano hill faded
+      ctx.fillStyle = 'rgba(150,75,0,0.1)'; ctx.beginPath(); ctx.moveTo(600,350); ctx.lineTo(700,280); ctx.lineTo(800,350); ctx.closePath(); ctx.fill();
+      // Colorful houses
+      ['#00BFFF','#FFD700','#FF6347'].forEach((c, i) => {
+        const hx = 620 + i * 40, hy = 330 - (i % 2) * 10;
+        ctx.fillStyle = c; ctx.fillRect(hx, hy, 30, 20);
+      });
+      // Plane
+      ctx.fillStyle = '#f00'; ctx.fillRect(plane.x, plane.y + 5, plane.w, plane.h - 10);
+      ctx.fillRect(plane.x + 10, plane.y - 2, 30, 4);
+      ctx.fillRect(plane.x + 10, plane.y + plane.h - 2, 30, 4);
+      ctx.fillRect(plane.x - 5, plane.y + plane.h/2 - 3, 5, 6);
+      ctx.beginPath(); ctx.arc(plane.x + 15, plane.y + plane.h, 4, 0, 2 * Math.PI); ctx.fill();
+      ctx.beginPath(); ctx.arc(plane.x + 35, plane.y + plane.h, 4, 0, 2 * Math.PI); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(plane.x + plane.w, plane.y + plane.h/2);
+      ctx.lineTo(plane.x + plane.w + 10, plane.y + plane.h/2 - 3);
+      ctx.lineTo(plane.x + plane.w + 10, plane.y + plane.h/2 + 3);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = '10px Arial'; ctx.fillText('russo', plane.x + 15, plane.y + plane.h/2 + 3);
+      // NPCs with distinct colors
+      npcs.forEach(n => {
+        const { x, y } = n;
+        ctx.fillStyle = '#f1c27d'; ctx.fillRect(x + 4, y, 4, 4);
+        ctx.fillStyle = n.type === 'admin' ? '#000' : (n.type === 'fisher' ? '#0000AA' : '#444');
+        ctx.fillRect(x, y + 6, 12, 18);
+        ctx.fillRect(x, y + 24, 3, 6); ctx.fillRect(x + 9, y + 24, 3, 6);
+        ctx.fillRect(x, y + 10, 3, 6); ctx.fillRect(x + 9, y + 10, 3, 6);
+        if (n.type === 'admin') {
+          ctx.fillStyle = '#f00'; ctx.fillRect(x, y + 14, 12, 3);
+          ctx.fillStyle = '#fff'; ctx.fillRect(x, y + 17, 12, 3);
+          ctx.fillStyle = '#0f0'; ctx.fillRect(x, y + 20, 12, 3);
+        }
+      });
+      // Boss
+      if (bossSpawned && boss) {
+        ctx.fillStyle = '#d2b48c'; ctx.fillRect(boss.x, boss.y, boss.w, boss.h);
+        ctx.fillStyle = '#8b4513'; ctx.beginPath(); ctx.moveTo(boss.x, boss.y);
+        ctx.lineTo(boss.x + boss.w/2, boss.y - boss.h/3);
+        ctx.lineTo(boss.x + boss.w, boss.y); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#000'; ctx.font = '14px Arial'; ctx.fillText('Comune di Positano', boss.x + 5, boss.y + boss.h/2);
+        ctx.fillStyle = '#000'; ctx.fillRect(boss.x, boss.y - 10, boss.w, 5);
+        ctx.fillStyle = '#0f0'; ctx.fillRect(boss.x, boss.y - 10, boss.w * (bossHP / bossHPMax), 5);
+      }
+      // Bombs
+      bombs.forEach(b => { ctx.fillStyle = '#6b4423'; ctx.fillRect(b.x, b.y, b.w, b.h); });
+      // HUD
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 18px Arial'; ctx.textAlign = 'left';
+      ctx.fillText('Punteggio: ' + score, 10, 30);
+      ctx.fillText('Munizioni: ' + ammo, 10, 55);
+    }
+
+    function loop() {
+      if (!gameStarted) drawStartScreen();
+      else if (levelComplete) drawLevelComplete();
+      else if (gameOver || outOfAmmo) { draw(); drawGameOver(); }
+      else { update(); draw(); }
+      requestAnimationFrame(loop);
+    }
+    loop();
+  </script>
+</body>
+</html>
