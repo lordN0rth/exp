@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+  <title>Il Barone Russo</title>
+  <style>
+    :root {
+      --admin: #000;
+      --fisher: #0000AA;
+      --civil: #444;
+      --poop: #6b4423;
+      --outline: #FFF;
+    }
+    html, body { margin:0; padding:0; overflow:hidden; background:#000; height:100%; }
+    #gameContainer {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      max-width: 480px;
+      max-height: 640px;
+      margin: auto;
+      background: #87CEEB;
+      touch-action: none;
+    }
+    #gameCanvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+    }
+    .control-btn {
+      position: absolute;
+      background: rgba(255,255,255,0.2);
+      border: 2px solid #fff;
+      border-radius: 6px;
+      width: 40px; height: 40px;
+      display: flex; align-items:center; justify-content:center;
+      font-size: 18px; color:#fff;
+      user-select:none;
+    }
+    #btnUp    { left: 50%; transform:translateX(-50%); bottom: 100px; }
+    #btnDown  { left: 50%; transform:translateX(-50%); bottom: 30px; }
+    #btnLeft  { left: 10px; bottom: 65px; }
+    #btnRight { right: 10px; bottom: 65px; }
+    #btnBomb  { right: 10px; bottom: 10px; }
+    #hudMobile {
+      position: absolute;
+      top: 8px; left: 8px;
+      background: rgba(0,0,0,0.5);
+      color: #fff;
+      padding: 4px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      pointer-events:none;
+    }
+    #startOverlay {
+      position: absolute;
+      top:0; left:0; width:100%; height:100%;
+      background: rgba(0,0,0,0.7);
+      display: flex; align-items:center; justify-content:center;
+      flex-direction: column;
+      color:#fff; font-family: monospace;
+    }
+    #startOverlay.hidden { display:none; }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <canvas id="gameCanvas" width="480" height="640"></canvas>
+    <div id="hudMobile">Punteggio: <span id="hudScore">0</span> &nbsp; Munizioni: <span id="hudAmmo">0</span></div>
+    <div id="btnUp" class="control-btn">↑</div>
+    <div id="btnDown" class="control-btn">↓</div>
+    <div id="btnLeft" class="control-btn">←</div>
+    <div id="btnRight" class="control-btn">→</div>
+    <div id="btnBomb" class="control-btn">💩</div>
+    <div id="startOverlay">
+      <div style="font-size:24px;">Il Barone Russo</div>
+      <div style="font-size:16px; margin-top:8px;">Tocca per iniziare</div>
+    </div>
+  </div>
+  <script>
+    const WIDTH=480, HEIGHT=640, GROUND_Y=HEIGHT*0.5, FRAME=1000/60;
+    const LEVEL_LENGTH=5000, MAX_LEVEL=5, MAX_AMMO=20, INITIAL_SCORE=5;
+
+    const canvas=document.getElementById('gameCanvas');
+    const ctx=canvas.getContext('2d');
+    const hudScore=document.getElementById('hudScore');
+    const hudAmmo=document.getElementById('hudAmmo');
+    const overlay=document.getElementById('startOverlay');
+
+    let gameStarted=false, level=1;
+    let score, distance, gameOver, outOfAmmo, levelComplete;
+    let scrollSpeed, spawnInterval, bossHPMax, ammo, lastSpawn;
+    let boss, bossSpawned=false, bossHP;
+    const plane={x:80,y:GROUND_Y-40,w:40,h:16,prop:0};
+    const npcs=[], bombs=[];
+    const input={up:false,down:false,left:false,right:false,bomb:false};
+
+    overlay.addEventListener('touchstart',e=>{e.preventDefault(); startGame();});
+    overlay.addEventListener('mousedown',e=>{startGame();});
+
+    function startGame(){
+      gameStarted=true;
+      overlay.classList.add('hidden');
+      level=1;
+      initLevel();
+    }
+    function nextLevel(){
+      level++;
+      initLevel();
+      levelComplete=false;
+      overlay.classList.add('hidden');
+    }
+    function initLevel(){
+      score=INITIAL_SCORE; distance=0;
+      gameOver=false; outOfAmmo=false; levelComplete=false;
+      npcs.length=0; bombs.length=0;
+      lastSpawn=performance.now(); boss=null; bossSpawned=false;
+      scrollSpeed=1+level*0.5;
+      spawnInterval=Math.max(1200-(level-1)*200,300);
+      bossHPMax=10+level*10; bossHP=bossHPMax;
+      ammo=MAX_AMMO; updateHUD();
+      plane.x=80; plane.y=GROUND_Y-40; plane.prop=0;
+      overlay.classList.add('hidden');
+    }
+    function updateHUD(){ hudScore.textContent=score; hudAmmo.textContent=ammo; }
+
+    function spawnNPC(){
+      const types=['admin','fisher','civil'];
+      const type=types[Math.floor(Math.random()*3)];
+      npcs.push({type,x:WIDTH+20,y:GROUND_Y-30,w:20,h:30,dx:scrollSpeed+Math.random()});
+    }
+    function spawnBoss(){ boss={x:WIDTH+40,y:GROUND_Y-80,w:100,h:80,dx:scrollSpeed*0.8}; bossSpawned=true; }
+    function dropBomb(){
+      if(ammo>0){
+        bombs.push({x:plane.x+plane.w/2,y:plane.y+plane.h,w:12,h:12});
+        ammo--; if(ammo===0) outOfAmmo=true; updateHUD();
+      }
+    }
+
+    ['btnUp','btnDown','btnLeft','btnRight','btnBomb'].forEach(id=>{
+      const flag=id==='btnUp'?'up':id==='btnDown'?'down':id==='btnLeft'?'left':id==='btnRight'?'right':'bomb';
+      const el=document.getElementById(id);
+      el.addEventListener('touchstart',e=>{e.preventDefault();input[flag]=true;});
+      el.addEventListener('touchend',e=>{e.preventDefault();input[flag]=false;if(flag==='bomb')dropBomb();});
+      el.addEventListener('mousedown',e=>{e.preventDefault();input[flag]=true;});
+      el.addEventListener('mouseup',e=>{e.preventDefault();input[flag]=false;if(flag==='bomb')dropBomb();});
+    });
+    window.addEventListener('keydown',e=>{
+      if(e.code==='ArrowUp')input.up=true;
+      if(e.code==='ArrowDown')input.down=true;
+      if(e.code==='ArrowLeft')input.left=true;
+      if(e.code==='ArrowRight')input.right=true;
+      if(e.code==='Space')dropBomb();
+    });
+    window.addEventListener('keyup',e=>{
+      if(e.code==='ArrowUp')input.up=false;
+      if(e.code==='ArrowDown')input.down=false;
+      if(e.code==='ArrowLeft')input.left=false;
+      if(e.code==='ArrowRight')input.right=false;
+    });
+
+    let lastTime=performance.now();
+    function update(){
+      const now=performance.now(); const dt=(now-lastTime)/(FRAME); lastTime=now;
+      if(!gameStarted||gameOver||outOfAmmo||levelComplete) return;
+      if(input.up&&plane.y>20)plane.y-=3*dt;
+      if(input.down&&plane.y<GROUND_Y-plane.h-10)plane.y+=3*dt;
+      if(input.left&&plane.x>0)plane.x-=3*dt;
+      if(input.right&&plane.x+plane.w<WIDTH)plane.x+=3*dt;
+      distance+=scrollSpeed*dt*2;
+      if(distance>=LEVEL_LENGTH&&!bossSpawned)spawnBoss();
+      if(!bossSpawned&&now-lastSpawn>spawnInterval){spawnNPC();lastSpawn=now;}
+      npcs.forEach(n=>n.x-=n.dx*dt*2);
+      bombs.forEach(b=>b.y+=5*dt);
+      if(bossSpawned&&boss){boss.x-=boss.dx*dt*2; if(boss.x+boss.w<0&&bossHP>0)gameOver=true;}
+      for(let i=bombs.length-1;i>=0;i--){const b=bombs[i];
+        if(bossSpawned&&boss&&b.x>boss.x&&b.x<boss.x+boss.w&&b.y>boss.y&&b.y<boss.y+boss.h){bombs.splice(i,1);bossHP--; if(bossHP<=0){level<MAX_LEVEL?levelComplete=true:gameOver=true;}}
+        else for(let j=npcs.length-1;j>=0;j--){const n=npcs[j];if(b.x>n.x&&b.x<n.x+n.w&&b.y>n.y&&b.y<n.y+n.h){bombs.splice(i,1);if(n.type==='admin'){score+=10;ammo=Math.min(ammo+5,MAX_AMMO);updateHUD();}else score-=5;npcs.splice(j,1);break;}}
+      }
+      if(score<=0)gameOver=true;
+      plane.prop+=0.3*dt;
+    }
+
+    function draw(){
+      ctx.clearRect(0,0,WIDTH,HEIGHT);
+      // Sky
+      let g=ctx.createLinearGradient(0,0,0,HEIGHT);
+      g.addColorStop(0,'#8fd3ff');g.addColorStop(1,'#87ceeb');ctx.fillStyle=g;ctx.fillRect(0,0,WIDTH,HEIGHT);
+      // Hills
+      ctx.fillStyle='rgba(200,200,200,0.08)';for(let x=0;x<WIDTH;x+=40)ctx.fillRect((x-(distance*0.02)%WIDTH),300,40,30);
+      // Sea
+      g=ctx.createLinearGradient(0,GROUND_Y,0,HEIGHT);
+      g.addColorStop(0,'#2aa3ff');g.addColorStop(1,'#0c6ed6');ctx.fillStyle=g;ctx.fillRect(0,GROUND_Y,WIDTH,HEIGHT-GROUND_Y);
+      // Boardwalk
+      ctx.fillStyle='#2b2b2b';ctx.fillRect(0,GROUND_Y,WIDTH,12);
+      // Hill & houses
+      ctx.fillStyle='rgba(150,75,0,0.1)';ctx.beginPath();ctx.moveTo(WIDTH-180,GROUND_Y);ctx.lineTo(WIDTH-100,GROUND_Y-70);ctx.lineTo(WIDTH,GROUND_Y);ctx.fill();
+      ['#00BFFF','#FFD700','#FF6347'].forEach((c,i)=>{ctx.globalAlpha=0.6;ctx.fillStyle=c;ctx.fillRect(WIDTH-160+i*50,GROUND_Y-52-(i%2)*12,35,25);ctx.globalAlpha=1;});
+      // Entities
+      npcs.forEach(drawNPC);
+      if(bossSpawned&&boss)drawBoss();
+      bombs.forEach(drawPoop);
+      drawPlane();
+      // Overlays
+      if(!gameStarted)drawStart();else if(levelComplete)drawLevelWin();else if(gameOver||outOfAmmo)drawGameOver();
+    }
+
+    function drawPlane(){ctx.save();ctx.translate(plane.x,plane.y);ctx.globalAlpha=0.2;ctx.fillStyle='#000';ctx.beginPath();ctx.ellipse(22,34,18,4,0,0,2*Math.PI);ctx.fill();ctx.globalAlpha=1;ctx.fillStyle='#e10600';ctx.fillRect(0,8,40,8);ctx.fillRect(6,0,28,4);ctx.fillRect(6,12,28,4);ctx.fillStyle='#a00000';ctx.fillRect(9,2,3,8);ctx.fillRect(26,2,3,8);ctx.fillStyle='#e10600';ctx.fillRect(-6,10,6,6);ctx.beginPath();ctx.arc(18,18,5,0,2*Math.PI);ctx.fill();ctx.beginPath();ctx.arc(33,18,5,0,2*Math.PI);ctx.fill();ctx.translate(44,16);ctx.rotate(plane.prop);ctx.fillStyle='var(--poop)';ctx.beginPath();ctx.arc(0,0,8,0,2*Math.PI);ctx.fill();ctx.restore();ctx.fillStyle='#fff';ctx.font='12px monospace';ctx.fillText('RUSSO',plane.x+8,plane.y+12);}    
+    function drawNPC(n){ctx.save();ctx.fillStyle='#f1c27d';ctx.fillRect(n.x+8,n.y,4,4);let col=getComputedStyle(document.documentElement).getPropertyValue(n.type==='admin'? '--admin':(n.type==='fisher'? '--fisher':'--civil')).trim();ctx.fillStyle=col;ctx.fillRect(n.x,n.y+6,n.w,n.h-6);if(n.type==='admin'){ctx.fillStyle='#f00';ctx.fillRect(n.x,n.y+18,n.w,3);ctx.fillStyle='#fff';ctx.fillRect(n.x,n.y+21,n.w,3);ctx.fillStyle='#0f0';ctx.fillRect(n.x,n.y+24,n.w,3);}ctx.restore();}
+    function drawBoss(){ctx.fillStyle='#d2b48c';ctx.fillRect(boss.x,boss.y,boss.w,boss.h);ctx.fillStyle='#8b4513';ctx.beginPath();ctx.moveTo(boss.x,boss.y);ctx.lineTo(boss.x+boss.w/2,boss.y-30);ctx.lineTo(boss.x+boss.w,boss.y);ctx.fill();ctx.fillStyle='#000';ctx.font='14px Arial';ctx.fillText('Comune di Positano',boss.x+8,boss.y+boss.h/2);ctx.strokeStyle='#fff';ctx.strokeRect(boss.x,boss.y-10,boss.w,6);ctx.fillStyle='#0f0';ctx.fillRect(boss.x,boss.y-10,boss.w*(bossHP/bossHPMax),6);}    
+    function drawPoop(b){ctx.save();ctx.fillStyle='var(--poop)';ctx.beginPath();ctx.arc(b.x,b.y,6,Math.PI,0);ctx.arc(b.x+4,b.y+2,4,Math.PI,0);ctx.arc(b.x+6,b.y+4,3,Math.PI,0);ctx.fill();ctx.restore();}
+    function drawStart(){overlay.classList.remove('hidden'); overlay.innerHTML=`<div style="font-size:24px;">Il Barone Russo</div><div style="font-size:16px;margin-top:8px;">Tocca per iniziare</div>`;}    
+    function drawLevelWin(){overlay.classList.remove('hidden'); overlay.innerHTML=`<div style="font-size:24px;">Livello ${level} completato!</div><div style="font-size:16px;margin-top:8px;">Tocca per proseguire</div>`;}    
+    function drawGameOver(){overlay.classList.remove('hidden'); overlay.innerHTML=`<div style="font-size:24px;">${outOfAmmo?'Hai finito la cacca':'Game Over'}</div><div style="font-size:16px;margin-top:8px;">Tocca per ricominciare</div>`;}    
+    function loop(){update();draw();requestAnimationFrame(loop);} loop();
+  </script>
+</body>
+</html>
