@@ -10,11 +10,14 @@
     #gameContainer { position:relative; width:100vw; height:100vh; max-width:480px; max-height:640px; margin:auto; background:#87CEEB; touch-action:none; }
     #gameCanvas { position:absolute; top:0; left:0; width:100%; height:100%; }
     .control-btn { position:absolute; background:rgba(255,255,255,0.2); border:2px solid #fff; border-radius:6px; width:40px; height:40px; display:flex; align-items:center; justify-content:center; font-size:18px; color:#fff; user-select:none; }
-    #btnUp{left:50%;transform:translateX(-50%);bottom:100px;}#btnDown{left:50%;transform:translateX(-50%);bottom:30px;}
-    #btnLeft{left:10px;bottom:65px;}#btnRight{right:10px;bottom:65px;}#btnBomb{right:10px;bottom:10px;}
+    #btnUp{left:50%;transform:translateX(-50%);bottom:100px;} #btnDown{left:50%;transform:translateX(-50%);bottom:30px;}
+    #btnLeft{left:10px;bottom:65px;} #btnRight{right:10px;bottom:65px;} #btnBomb{right:10px;bottom:10px;}
     #hudMobile{position:absolute;top:8px;left:8px;background:rgba(0,0,0,0.5);color:#fff;padding:4px 6px;border-radius:4px;font-size:12px;pointer-events:none;}
     #startOverlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;font-family:monospace;}
     #startOverlay.hidden{display:none;}
+    #startOverlay img{max-width:80%;max-height:30%;margin-bottom:10px;border:2px solid #fff;}
+    #startOverlay .title{font-size:24px;margin-bottom:8px;}
+    #startOverlay .instr{font-size:14px;text-align:center;max-width:80%;line-height:1.2;}
   </style>
 </head>
 <body>
@@ -27,21 +30,20 @@
     <div id="btnRight" class="control-btn">→</div>
     <div id="btnBomb" class="control-btn">💩</div>
     <div id="startOverlay">
-      <div style="font-size:24px;">Il Barone Russo</div>
-      <div style="font-size:14px; margin-top:8px; text-align:center; max-width:80%;">
-        Colpisci solo i personaggi con fascia tricolore, evita i cittadini.
-      </div>
-      <div style="font-size:14px; margin-top:4px; text-align:center; max-width:80%;">
-        +10 punti per fascia tricolore, -5 punti per i cittadini. Tocca per iniziare.
-      </div>
+      <img src="https://raw.githubusercontent.com/lordN0rth/exp/main/55306DBB-DBF3-415D-8936-E37F27806847.PNG" alt="Positano"/>
+      <div class="title">Il Barone Russo</div>
+      <div class="instr">Colpisci solo gli amministratori con fascia tricolore, evita i cittadini.</div>
+      <div class="instr" style="margin-top:4px;">+10 punti per fascia, -5 per cittadini. Tocca per iniziare.</div>
     </div>
   </div>
   <script>
+    // [Il resto del codice rimane invariato]
     const WIDTH=480, HEIGHT=640, GROUND_Y=HEIGHT*0.5, FRAME=1000/60;
     const LEVEL_LENGTH=5000, MAX_LEVEL=5, MAX_AMMO=20, INITIAL_SCORE=5;
     const canvas=document.getElementById('gameCanvas'), ctx=canvas.getContext('2d');
     const hudScore=document.getElementById('hudScore'), hudAmmo=document.getElementById('hudAmmo');
     const overlay=document.getElementById('startOverlay');
+
     let gameStarted=false, level=1;
     let score, distance, gameOver, outOfAmmo, levelComplete;
     let scrollSpeed, spawnInterval, bossHPMax, ammo, lastSpawn;
@@ -49,31 +51,22 @@
     const plane={x:80,y:GROUND_Y-40,w:40,h:16,prop:0};
     const npcs=[], bombs=[], houses=[];
     const input={up:false,down:false,left:false,right:false,bomb:false};
-    // Generate houses
-    (function(){ const cols=['#FFB347','#FF6961','#77DD77','#AEC6CF','#FDFD96']; for(let x=20;x<WIDTH-20;x+=30){ const y=GROUND_Y-60-Math.random()*40; houses.push({x,y,w:25,h:20,col:cols[Math.floor(Math.random()*cols.length)]}); }})();
-    overlay.addEventListener('touchstart',e=>{e.preventDefault(); startGame();});
-    overlay.addEventListener('mousedown',e=>{ startGame(); });
-    function startGame(){ gameStarted=true; overlay.classList.add('hidden'); level=1; initLevel(); }
-    function nextLevel(){ level++; initLevel(); levelComplete=false; overlay.classList.add('hidden'); }
-    function initLevel(){ score=INITIAL_SCORE; distance=0; gameOver=outOfAmmo=levelComplete=false; npcs.length=bombs.length=0; lastSpawn=performance.now(); boss=null; bossSpawned=false; scrollSpeed=0.4+(level-1)*0.2; spawnInterval=Math.max(2000-(level-1)*300,400); bossHPMax=10+level*10; bossHP=bossHPMax; ammo=MAX_AMMO; updateHUD(); plane.x=80; plane.y=GROUND_Y-40; plane.prop=0; }
-    function updateHUD(){ hudScore.textContent=score; hudAmmo.textContent=ammo; }
-    function spawnNPC(){ const types=['admin','fisher','civil']; const type=types[Math.floor(Math.random()*3)]; npcs.push({type,x:WIDTH+20,y:GROUND_Y-30,w:24,h:36,dx:scrollSpeed+Math.random()*0.5}); }
-    function spawnBoss(){ boss={x:WIDTH+40,y:GROUND_Y-80,w:100,h:80,dx:scrollSpeed*0.8}; bossSpawned=true; }
-    function dropBomb(){ if(ammo>0){ bombs.push({x:plane.x+plane.w/2,y:plane.y+plane.h,w:12,h:12}); ammo--; if(ammo===0) outOfAmmo=true; updateHUD(); }}
-    ['btnUp','btnDown','btnLeft','btnRight','btnBomb'].forEach(id=>{ const f=id.replace('btn','').toLowerCase(), el=document.getElementById(id); el.addEventListener('touchstart',e=>{e.preventDefault();input[f]=true;}); el.addEventListener('touchend',e=>{e.preventDefault();input[f]=false; if(f==='bomb') dropBomb();}); el.addEventListener('mousedown',e=>{e.preventDefault();input[f]=true;}); el.addEventListener('mouseup',e=>{e.preventDefault();input[f]=false; if(f==='bomb') dropBomb();}); });
-    window.addEventListener('keydown',e=>{ if(e.code==='Space') dropBomb(); const k=e.code.replace('Arrow','').toLowerCase(); if(input.hasOwnProperty(k)) input[k]=true; });
-    window.addEventListener('keyup',  e=>{ const k=e.code.replace('Arrow','').toLowerCase(); if(input.hasOwnProperty(k)) input[k]=false; });
-    let lastTime=performance.now(); function update(){ const now=performance.now(), dt=(now-lastTime)/FRAME; lastTime=now; if(!gameStarted||gameOver||outOfAmmo||levelComplete) return; if(input.up&&plane.y>20) plane.y-=3*dt; if(input.down&&plane.y<GROUND_Y-plane.h-10) plane.y+=3*dt; if(input.left&&plane.x>0) plane.x-=3*dt; if(input.right&&plane.x+plane.w<WIDTH) plane.x+=3*dt; distance+=scrollSpeed*dt*2; if(distance>=LEVEL_LENGTH&&!bossSpawned) spawnBoss(); if(!bossSpawned&&now-lastSpawn>spawnInterval){spawnNPC(); lastSpawn=now;} npcs.forEach(n=>n.x-=n.dx*dt*2); bombs.forEach(b=>b.y+=5*dt); if(bossSpawned&&boss){ boss.x-=boss.dx*dt*2; if(boss.x+boss.w<0&&bossHP>0) gameOver=true; } for(let i=bombs.length-1;i>=0;i--){ const b=bombs[i]; if(bossSpawned&&boss&&b.x>boss.x&&b.x<boss.x+boss.w&&b.y>boss.y&&b.y<boss.y+boss.h){ bombs.splice(i,1); bossHP--; if(bossHP<=0) level<MAX_LEVEL?levelComplete=true:gameOver=true; } else{ for(let j=npcs.length-1;j>=0;j--){ const n=npcs[j]; if(b.x>n.x&&b.x<n.x+n.w&&b.y>n.y&&b.y<n.y+n.h){ bombs.splice(i,1); if(n.type==='admin'){ score+=10; ammo=Math.min(ammo+5,MAX_AMMO); updateHUD(); } else score-=5; npcs.splice(j,1); break; } } } if(score<=0) gameOver=true; } plane.prop+=0.3*dt; }
-    function draw(){ ctx.clearRect(0,0,WIDTH,HEIGHT); let g=ctx.createLinearGradient(0,0,0,HEIGHT); g.addColorStop(0,'#8fd3ff'); g.addColorStop(1,'#87ceeb'); ctx.fillStyle=g; ctx.fillRect(0,0,WIDTH,HEIGHT); ctx.fillStyle='rgba(200,200,200,0.08)'; for(let x=0;x<WIDTH;x+=40) ctx.fillRect((x-(distance*0.02)%WIDTH),GROUND_Y-80,40,30); houses.forEach(h=>{ ctx.globalAlpha=0.7; ctx.fillStyle=h.col; ctx.fillRect(h.x,h.y,h.w,h.h); ctx.globalAlpha=1; }); g=ctx.createLinearGradient(0,GROUND_Y,0,HEIGHT); g.addColorStop(0,'#2aa3ff'); g.addColorStop(1,'#0c6ed6'); ctx.fillStyle=g; ctx.fillRect(0,GROUND_Y,WIDTH,HEIGHT-GROUND_Y); ctx.fillStyle='#2b2b2b'; ctx.fillRect(0,GROUND_Y,WIDTH,12); npcs.forEach(drawNPC); if(bossSpawned&&boss) drawBoss(); bombs.forEach(drawPoop); drawPlane(); if(!gameStarted) drawStart(); else if(levelComplete) drawLevelWin(); else if(gameOver||outOfAmmo) drawGameOver(); }
-    function drawPlane(){ ctx.save(); ctx.translate(plane.x,plane.y); ctx.globalAlpha=0.2; ctx.fillStyle='#000'; ctx.beginPath(); ctx.ellipse(22,34,18,4,0,0,2*Math.PI); ctx.fill(); ctx.globalAlpha=1; ctx.fillStyle='#e10600'; ctx.fillRect(0,8,40,8); ctx.fillRect(6,0,28,4); ctx.fillRect(6,12,28,4); ctx.fillStyle='#a00000'; ctx.fillRect(9,2,3,8); ctx.fillRect(26,2,3,8); ctx.fillStyle='#e10600'; ctx.fillRect(-6,10,6,6); ctx.beginPath(); ctx.arc(18,18,5,0,2*Math.PI); ctx.fill(); ctx.beginPath(); ctx.arc(33,18,5,0,2*Math.PI); ctx.fill(); ctx.translate(44,16); ctx.rotate(plane.prop); ctx.fillStyle='var(--poop)'; ctx.beginPath(); ctx.arc(0,0,8,0,2*Math.PI); ctx.fill(); ctx.restore(); ctx.fillStyle='#fff'; ctx.strokeStyle='#000'; ctx.lineWidth=2; ctx.font='bold 14px monospace'; ctx.strokeText('RUSSO',plane.x+8,plane.y+12); ctx.fillText('RUSSO',plane.x+8,plane.y+12); }
-    function drawNPC(n){ ctx.save(); ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue(n.type==='admin'? '--admin':(n.type==='fisher'? '--fisher':'--civil')).trim(); ctx.fillRect(n.x,n.y+6,n.w,n.h-6); ctx.fillStyle='#f1c27d'; ctx.fillRect(n.x+8,n.y,4,4); if(n.type==='admin'){ ctx.save(); ctx.translate(n.x+n.w/2,n.y+n.h/2); ctx.rotate(-Math.PI/4); const L=Math.hypot(n.w,n.h), w=6; ctx.fillStyle='#f00'; ctx.fillRect(-L/2,-w/2,L,w); ctx.fillStyle='#fff'; ctx.fillRect(-L/2,w/2,L,w); ctx.fillStyle='#0f0'; ctx.fillRect(-L/2,3*w/2,L,w); ctx.restore(); } ctx.restore(); }
-    function drawBoss(){ ctx.fillStyle='#d2b48c'; ctx.fillRect(boss.x,boss.y,boss.w,boss.h); ctx.fillStyle='#8b4513'; ctx.beginPath(); ctx.moveTo(boss.x,boss.y); ctx.lineTo(boss.x+boss.w/2,boss.y-30); ctx.lineTo(boss.x+boss.w,boss.y); ctx.fill(); ctx.fillStyle='#000'; ctx.font='14px Arial'; ctx.fillText('Comune di Positano',boss.x+8,boss.y+boss.h/2); ctx.strokeStyle='#fff'; ctx.strokeRect(boss.x,boss.y-10,boss.w,6); ctx.fillStyle='#0f0'; ctx.fillRect(boss.x,boss.y-10,boss.w*(bossHP/bossHPMax),6); }
-    function drawPoop(b){ ctx.save(); ctx.font='20px monospace'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('💩',b.x+b.w/2,b.y+b.h/2); ctx.restore(); }
-    function drawStart(){ overlay.classList.remove('hidden'); overlay.innerHTML=`<div style="font-size:24px;">Il Barone Russo</div><div style="font-size:14px; margin-top:8px; text-align:center; max-width:80%;">Colpisci solo i personaggi con fascia tricolore (amministratori), evita i cittadini.</div><div style="font-size:14px; margin-top:4px; text-align:center; max-width:80%;">+10 punti per fascia tricolore, -5 punti per i cittadini. Tocca per iniziare.</div>`; }
-    function drawLevelWin(){ overlay.classList.remove('hidden'); overlay.innerHTML=`<div style="font-size:24px;">Livello ${level} completato!</div><div style="font-size:16px; margin-top:8px;">Tocca per proseguire</div>`; }
-    function drawGameOver(){ overlay.classList.remove('hidden'); overlay.innerHTML=`<div style="font-size:24px;">${outOfAmmo?'Hai finito la cacca':'Game Over'}</div><div style="font-size:16px; margin-top:8px;">Tocca per ricominciare</div>`; }
-    function loop(){ update(); draw(); requestAnimationFrame(loop); }
-    loop();
+
+    (function(){const cols=['#FFB347','#FF6961','#77DD77','#AEC6CF','#FDFD96'];for(let x=20;x<WIDTH-20;x+=30){const y=GROUND_Y-60-Math.random()*40;houses.push({x,y,w:25,h:20,col:cols[Math.floor(Math.random()*cols.length)]});}})();
+
+    overlay.addEventListener('touchstart',e=>{e.preventDefault();startGame();});
+    overlay.addEventListener('mousedown',e=>{startGame();});
+    function startGame(){gameStarted=true;overlay.classList.add('hidden');level=1;initLevel();}
+    function nextLevel(){level++;initLevel();levelComplete=false;overlay.classList.add('hidden');}
+    function initLevel(){score=INITIAL_SCORE;distance=0;gameOver=outOfAmmo=levelComplete=false;npcs.length=bombs.length=0;lastSpawn=performance.now();boss=null;bossSpawned=false;scrollSpeed=0.4+(level-1)*0.2;spawnInterval=Math.max(2000-(level-1)*300,400);bossHPMax=10+level*10;bossHP=bossHPMax;ammo=MAX_AMMO;updateHUD();plane.x=80;plane.y=GROUND_Y-40;plane.prop=0;}
+    function updateHUD(){hudScore.textContent=score;hudAmmo.textContent=ammo;}
+    function spawnNPC(){const types=['admin','fisher','civil'];const type=types[Math.floor(Math.random()*3)];npcs.push({type,x:WIDTH+20,y:GROUND_Y-30,w:24,h:36,dx:scrollSpeed+Math.random()*0.5});}
+    function spawnBoss(){boss={x:WIDTH+40,y:GROUND_Y-80,w:100,h:80,dx:scrollSpeed*0.8};bossSpawned=true;}
+    function dropBomb(){if(ammo>0){bombs.push({x:plane.x+plane.w/2,y:plane.y+plane.h,w:12,h:12});ammo--;if(ammo===0)outOfAmmo=true;updateHUD();}}
+    ['btnUp','btnDown','btnLeft','btnRight','btnBomb'].forEach(id=>{const f=id.replace('btn','').toLowerCase(),el=document.getElementById(id);el.addEventListener('touchstart',e=>{e.preventDefault();input[f]=true;});el.addEventListener('touchend',e=>{e.preventDefault();input[f]=false;if(f==='bomb')dropBomb();});el.addEventListener('mousedown',e=>{e.preventDefault();input[f]=true;});el.addEventListener('mouseup',e=>{e.preventDefault();input[f]=false;if(f==='bomb')dropBomb();});});
+    window.addEventListener('keydown',e=>{if(e.code==='Space')dropBomb();const k=e.code.replace('Arrow','').toLowerCase();if(input.hasOwnProperty(k))input[k]=true;});
+    window.addEventListener('keyup',e=>{const k=e.code.replace('Arrow','').toLowerCase();if(input.hasOwnProperty(k))input[k]=false;});
+    let lastTime=performance.now();function update(){const now=performance.now(),dt=(now-lastTime)/FRAME;lastTime=now;if(!gameStarted||gameOver||outOfAmmo||levelComplete)return;input.up&&plane.y>20&&(plane.y-=3*dt);input.down&&plane.y<GROUND_Y-plane.h-10&&(plane.y+=3*dt);input.left&&plane.x>0&&(plane.x-=3*dt);input.right&&plane.x+plane.w<WIDTH&&(plane.x+=3*dt);distance+=scrollSpeed*dt*2;if(distance>=LEVEL_LENGTH&&!bossSpawned)spawnBoss();if(!bossSpawned&&now-lastSpawn>spawnInterval){spawnNPC();lastSpawn=now;}npcs.forEach(n=>n.x-=n.dx*dt*2);bombs.forEach(b=>b.y+=5*dt);if(bossSpawned&&boss){boss.x-=boss.dx*dt*2;if(boss.x+boss.w<0&&bossHP>0)gameOver=true;}for(let i=bombs.length-1;i>=0;i--){const b=bombs[i];if(bossSpawned&&boss&&b.x>boss.x&&b.x<boss.x+boss.w&&b.y>boss.y&&b.y<boss.y+boss.h){bombs.splice(i,1);bossHP--,bossHP<=0&&(level<MAX_LEVEL?levelComplete=true:gameOver=true);}else for(let j=npcs.length-1;j>=0;j--){const n=npcs[j];if(b.x>n.x&&b.x<n.x+n.w&&b.y>n.y&&b.y<n.y+n.h){bombs.splice(i,1);n.type==='admin'?(score+=10,ammo=Math.min(ammo+5,MAX_AMMO),updateHUD()):score-=5,npcs.splice(j,1);break;}}score<=0&&(gameOver=true);}plane.prop+=0.3*dt;}function draw(){ctx.clearRect(0,0,WIDTH,HEIGHT);let g=ctx.createLinearGradient(0,0,0,HEIGHT);g.addColorStop(0,'#8fd3ff'),g.addColorStop(1,'#87ceeb'),ctx.fillStyle=g,ctx.fillRect(0,0,WIDTH,HEIGHT),ctx.fillStyle='rgba(200,200,200,0.08)',for(let x=0;x<WIDTH;x+=40)ctx.fillRect((x-(distance*0.02)%WIDTH),GROUND_Y-80,40,30);houses.forEach(h=>{ctx.globalAlpha=0.7,ctx.fillStyle=h.col,ctx.fillRect(h.x,h.y,h.w,h.h),ctx.globalAlpha=1}),g=ctx.createLinearGradient(0,GROUND_Y,0,HEIGHT),g.addColorStop(0,'#2aa3ff'),g.addColorStop(1,'#0c6ed6'),ctx.fillStyle=g,ctx.fillRect(0,GROUND_Y,WIDTH,HEIGHT-GROUND_Y),ctx.fillStyle='#2b2b2b',ctx.fillRect(0,GROUND_Y,WIDTH,12),npcs.forEach(drawNPC),bossSpawned&&boss&&drawBoss(),bombs.forEach(drawPoop),drawPlane(),!gameStarted?drawStart():levelComplete?drawLevelWin():gameOver||outOfAmmo&&drawGameOver()}function drawPlane(){ctx.save(),ctx.translate(plane.x,plane.y),ctx.globalAlpha=0.2,ctx.fillStyle='#000',ctx.beginPath(),ctx.ellipse(22,34,18,4,0,0,2*Math.PI),ctx.fill(),ctx.globalAlpha=1,ctx.fillStyle='#e10600',ctx.fillRect(0,8,40,8),ctx.fillRect(6,0,28,4),ctx.fillRect(6,12,28,4),ctx.fillStyle='#a00000',ctx.fillRect(9,2,3,8),ctx.fillRect(26,2,3,8),ctx.fillStyle='#e10600',ctx.fillRect(-6,10,6,6),ctx.beginPath(),ctx.arc(18,18,5,0,2*Math.PI),ctx.fill(),ctx.beginPath(),ctx.arc(33,18,5,0,2*Math.PI),ctx.fill(),ctx.translate(44,16),ctx.rotate(plane.prop),ctx.fillStyle='var(--poop)',ctx.beginPath(),ctx.arc(0,0,8,0,2*Math.PI),ctx.fill(),ctx.restore(),ctx.fillStyle='#fff',ctx.strokeStyle='#000',ctx.lineWidth=2,ctx.font='bold 14px monospace',ctx.strokeText('RUSSO',plane.x+8,plane.y+12),ctx.fillText('RUSSO',plane.x+8,plane.y+12)}function drawNPC(n){ctx.save(),ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue(n.type==='admin'? '--admin':(n.type==='fisher'? '--fisher':'--civil')).trim(),ctx.fillRect(n.x,n.y+6,n.w,n.h-6),ctx.fillStyle='#f1c27d',ctx.fillRect(n.x+8,n.y,4,4),n.type==='admin'&&function(){ctx.save(),ctx.translate(n.x+n.w/2,n.y+n.h/2),ctx.rotate(-Math.PI/4);const L=Math.hypot(n.w,n.h),w=6;ctx.fillStyle='#f00',ctx.fillRect(-L/2,-w/2,L,w),ctx.fillStyle='#fff',ctx.fillRect(-L/2,w/2,L,w),ctx.fillStyle='#0f0',ctx.fillRect(-L/2,3*w/2,L,w),ctx.restore()}(),ctx.restore()}function drawBoss(){ctx.fillStyle='#d2b48c',ctx.fillRect(boss.x,boss.y,boss.w,boss.h),ctx.fillStyle='#8b4513',ctx.beginPath(),ctx.moveTo(boss.x,boss.y),ctx.lineTo(boss.x+boss.w/2,boss.y-30),ctx.lineTo(boss.x+boss.w,boss.y),ctx.fill(),ctx.fillStyle='#000',ctx.font='14px Arial',ctx.fillText('Comune di Positano',boss.x+8,boss.y+boss.h/2),ctx.strokeStyle='#fff',ctx.strokeRect(boss.x,boss.y-10,boss.w,6),ctx.fillStyle='#0f0',ctx.fillRect(boss.x,boss.y-10,boss.w*(bossHP/bossHPMax),6)}function drawPoop(b){ctx.save(),ctx.font='20px monospace',ctx.textAlign='center',ctx.textBaseline='middle',ctx.fillText('💩',b.x+b.w/2,b.y+b.h/2),ctx.restore()}function drawStart(){overlay.classList.remove('hidden'),overlay.innerHTML=`<img src="https://raw.githubusercontent.com/lordN0rth/exp/main/55306DBB-DBF3-415D-8936-E37F27806847.PNG" alt="Positano"/><div class="title">Il Barone Russo</div><div class="instr">Colpisci solo gli amministratori con fascia tricolore, evita i cittadini.</div><div class="instr" style="margin-top:4px;">+10 punti per fascia, -5 per cittadini. Tocca per iniziare.</div>`;}function drawLevelWin(){overlay.classList.remove('hidden'),overlay.innerHTML=`<div style="font-size:24px;">Livello ${level} completato!</div><div style="font-size:16px; margin-top:8px;">Tocca per proseguire</div>`;}function drawGameOver(){overlay.classList.remove('hidden'),overlay.innerHTML=`<div style="font-size:24px;">${outOfAmmo?'Hai finito la cacca':'Game Over'}</div><div style="font-size:16px; margin-top:8px;">Tocca per ricominciare</div>`;}function loop(){update(),draw(),requestAnimationFrame(loop)}loop();
   </script>
 </body>
 </html>
